@@ -7,6 +7,12 @@ public class PlayerController : MonoBehaviour
     const int TRANS_TIME = 3;
     const int ROT_TIME = 3;
 
+
+    const int FALL_COUNT_UNIT = 120;
+    const int FALL_COUNT_SPD = 10;
+    const int FALL_COUNT_FAST_SPD = 20;
+    const int GROUND_FRAMES = 50;
+
     enum RotState
     {
         Up = 0,
@@ -29,6 +35,10 @@ public class PlayerController : MonoBehaviour
 
     LogicalInput logicalInput = new ();
 
+
+    int _fallCount = 0;
+    int _groundFrame = GROUND_FRAMES;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -43,7 +53,6 @@ public class PlayerController : MonoBehaviour
         Vector2Int posChild = CalcChildPuyoPos(_position, _rotate);
         _puyoControllers[1].SetPos(new Vector3((float)_position.x, (float)_position.y + 1.0f, 0.0f));
     }
-
 
     static readonly Vector2Int[] rotate_tbl = new Vector2Int[]{
         Vector2Int.up, Vector2Int.right, Vector2Int.down, Vector2Int.left};
@@ -124,6 +133,20 @@ public class PlayerController : MonoBehaviour
         return true;
     }
 
+    void Settle()
+    {
+
+        bool is_set0 = boardController.Settle(_position,
+        (int)_puyoControllers[0].GetPuyoType());
+        Debug.Assert(is_set0);
+
+        bool is_set1 = boardController.Settle(CalcChildPuyoPos(_position, _rotate),
+            (int)_puyoControllers[1].GetPuyoType());
+        Debug.Assert(is_set1);
+
+        gameObject.SetActive(false);
+    }
+
     void QuickDrop()
     {
 
@@ -136,16 +159,7 @@ public class PlayerController : MonoBehaviour
 
         _position = pos;
 
-
-        bool is_set0 = boardController.Settle(_position,
-            (int)_puyoControllers[0].GetPuyoType());
-        Debug.Assert(is_set0);
-
-        bool is_set1 = boardController.Settle(CalcChildPuyoPos(_position, _rotate),
-            (int)_puyoControllers[1].GetPuyoType());
-        Debug.Assert(is_set1);
-
-        gameObject.SetActive(false);
+        Settle();
     }
 
     static readonly KeyCode[] key_code_tbl = new KeyCode[(int)LogicalInput.Key.MAX]{
@@ -156,7 +170,6 @@ public class PlayerController : MonoBehaviour
         KeyCode.UpArrow,
         KeyCode.DownArrow,
     };
-
 
     void UpdateInput()
     {
@@ -174,17 +187,44 @@ public class PlayerController : MonoBehaviour
         logicalInput.Update(inputDev);
     }
 
+    bool Fall(bool is_fast)
+    {
+        _fallCount -= is_fast ? FALL_COUNT_FAST_SPD : FALL_COUNT_SPD;
 
 
+        while (_fallCount < 0)
+        {
+            if (!CanMove(_position + Vector2Int.down, _rotate))
+            {
+
+                _fallCount = 0;
+                if (0 < --_groundFrame) return true;
 
 
+                Settle();
+                return false;
+            }
 
+
+            _position += Vector2Int.down;
+            _last_position += Vector2Int.down;
+            _fallCount += FALL_COUNT_UNIT;
+        }
+
+        return true;
+    }
 
 
 
     void Control ()
     {
-        //•½sˆÚ“®
+
+        if (!Fall(logicalInput.IsRaw(LogicalInput.Key.Down))) return;
+
+
+        if (_animationController.Update()) return;
+
+        //ï¿½ï¿½ï¿½sï¿½Ú“ï¿½
         if (logicalInput.IsRepeat(LogicalInput.Key.Right))
         {
             if (Translate(true)) return;
@@ -194,7 +234,7 @@ public class PlayerController : MonoBehaviour
             if (Translate(false)) return;
         }
 
-        //‰ñ“]
+        //ï¿½ï¿½]
         if (logicalInput.IsTrigger(LogicalInput.Key.RotR))
         {
            if (Rotate(true)) return;
@@ -204,7 +244,7 @@ public class PlayerController : MonoBehaviour
            if (Rotate(false)) return;
         }
 
-        //ƒNƒCƒbƒNƒhƒƒbƒv
+        //ï¿½Nï¿½Cï¿½bï¿½Nï¿½hï¿½ï¿½ï¿½bï¿½v
         if (logicalInput.IsRelease(LogicalInput.Key.QuickDrop))
         {
             QuickDrop();
@@ -217,12 +257,10 @@ public class PlayerController : MonoBehaviour
         UpdateInput();
 
 
-        if (!_animationController.Update())
-        {
-            Control();
-        }
+        Control();
 
 
+        Vector3 dy = Vector3.up * (float)_fallCount / (float)FALL_COUNT_UNIT;
         float anim_rate = _animationController.GetNormalized();
         _puyoControllers[0].SetPos(Interpolate(_position, RotState.Invalid, _last_position, RotState.Invalid, anim_rate));
         _puyoControllers[1].SetPos(Interpolate(_position, _rotate, _last_position, _last_rotate, anim_rate));
