@@ -127,7 +127,6 @@ public class PlayDirector : MonoBehaviour
     class GameOverState : IState
     {
         public IState.E_State Initialize(PlayDirector parent) {
-            SceneManager.LoadScene(0);
             return IState.E_State.Unchanged;
         }
         public IState.E_State Update(PlayDirector parent) { return IState.E_State.Unchanged; }
